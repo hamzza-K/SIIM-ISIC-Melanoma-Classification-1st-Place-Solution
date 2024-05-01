@@ -2,10 +2,6 @@ import os
 import time
 import random
 import argparse
-import numpy as np
-import pandas as pd
-import cv2
-import PIL.Image
 from tqdm import tqdm
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
@@ -18,11 +14,22 @@ from torch.optim import lr_scheduler
 from torch.utils.data.sampler import RandomSampler, SequentialSampler
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from util import GradualWarmupSchedulerV2
-import apex
-from apex import amp
-from dataset import get_df, get_transforms, MelanomaDataset
-from models import Effnet_Melanoma, Resnest_Melanoma, Seresnext_Melanoma
-from train import get_trans
+from dataset import get_df, MelanomaDataset
+from models import Resnest_Melanoma, Seresnext_Melanoma
+
+
+def get_trans(img, I):
+
+    if I >= 4:
+        img = img.transpose(2, 3)
+    if I % 4 == 0:
+        return img
+    elif I % 4 == 1:
+        return img.flip(2)
+    elif I % 4 == 2:
+        return img.flip(3)
+    elif I % 4 == 3:
+        return img.flip(2).flip(3)
 
 
 def parse_args():
@@ -60,11 +67,9 @@ def main():
         args.use_meta
     )
 
-    transforms_train, transforms_val = get_transforms(args.image_size)
-
     if args.DEBUG:
         df_test = df_test.sample(args.batch_size * 3)
-    dataset_test = MelanomaDataset(df_test, 'test', meta_features, transform=transforms_val)
+    dataset_test = MelanomaDataset(df_test, 'test', meta_features)
     test_loader = torch.utils.data.DataLoader(dataset_test, batch_size=args.batch_size, num_workers=args.num_workers)
 
     # load model
@@ -72,8 +77,7 @@ def main():
     for fold in range(5):
 
         if args.eval == 'best':
-            model_file = 
-            os.path.join(args.model_dir, f'{args.kernel_type}_best_fold{fold}.pth')
+            model_file = os.path.join(args.model_dir, f'{args.kernel_type}_best_fold{fold}.pth')
         elif args.eval == 'best_20':
             model_file = os.path.join(args.model_dir, f'{args.kernel_type}_best_20_fold{fold}.pth')
         if args.eval == 'final':
@@ -142,8 +146,6 @@ if __name__ == '__main__':
         ModelClass = Resnest_Melanoma
     elif args.enet_type == 'seresnext101':
         ModelClass = Seresnext_Melanoma
-    elif 'efficientnet' in args.enet_type:
-        ModelClass = Effnet_Melanoma
     else:
         raise NotImplementedError()
 
